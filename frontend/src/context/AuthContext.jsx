@@ -3,25 +3,26 @@ import axios from "axios";
 
 const AuthContext = createContext();
 
-const API = "http://localhost:5000/api";
-
+const API = `${import.meta.env.VITE_API_URL}`;
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const checkAuth = async () => {
-    try {
-      const res = await axios.get(`${API}/auth/me`, {
-        withCredentials: true,
-      });
+const checkAuth = async () => {
+  try {
+    const res = await axios.get(`${API}/auth/me`, {
+      withCredentials: true,
+    });
 
-      setUser(res.data.user);
-    } catch (error) {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setUser(res.data.user);
+    return res.data.user; // <-- ADD THIS RETURN STATEMENT
+  } catch (error) {
+    setUser(null);
+    return null; // <-- ADD THIS RETURN STATEMENT
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     checkAuth();
