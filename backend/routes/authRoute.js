@@ -12,10 +12,12 @@ router.post("/register", register);
 router.post("/login", login);
 router.get("/me",authMiddleware,me);
 router.post("/logout", (req, res) => {
+    const isProduction = process.env.NODE_ENV === "production";
+
   res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: isProduction ? "none" : "lax",
   });
   res.json({ message: "Logged out successfully" });
 } );
