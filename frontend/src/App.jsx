@@ -22,6 +22,7 @@ import Jobs from "./pages/public/Jobs";
 import JobDetails from "./pages/public/JobDetails";
 import Companies from "./pages/public/Companies";
 import EmployerJobs from "./pages/employer/EmployerJobs";
+import EmployerApplications from "./pages/employer/EmployerApplications";
 
 function App() {
   return (
@@ -74,6 +75,10 @@ function App() {
             path="jobs"
             element={<CandidateJobs />}
           />
+          {/* <Route
+            path="jobs/:id"
+            element={<CandidateJobDetail />}
+          /> */}
 
           <Route
             path="applications"
@@ -111,6 +116,10 @@ function App() {
             <Route
             path="jobs"
             element={<EmployerJobs />}
+            />
+            <Route
+            path="applications"
+            element={<EmployerApplications />}
             />
         </Route>
       </Route>

@@ -9,6 +9,7 @@ import authRoute from "./routes/authRoute.js";
 import candidateRoute from "./routes/candidateRoute.js";
 import jobRoute from "./routes/jobRoute.js";
 import companyRoute from "./routes/companyRoute.js";
+import applicationRoutes from "./routes/applicationRoute.js";
 
 const app = express();
 connectDB();
@@ -45,6 +46,7 @@ app.use("/api/auth", authRoute);
 app.use("/api/candidate", candidateRoute);
 app.use("/api/jobs", jobRoute);
 app.use("/api/company", companyRoute);
+app.use("/api/applications", applicationRoutes);
 
 
 app.listen(process.env.PORT || 5000, () => {    

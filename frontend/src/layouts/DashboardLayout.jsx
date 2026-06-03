@@ -9,26 +9,20 @@ export default function DashboardLayout() {
 
   return (
     <div
-      className="h-screen overflow-hidden"
-      style={{
-        background: "var(--bg)",
-      }}
+      className="flex flex-col h-screen"
+      style={{ background: "var(--bg)" }}
     >
-      <Navbar
-        toggleSidebar={() =>
-          setIsOpen(!isOpen)
-        }
-      />
+      {/* Navbar sits in normal flow, takes its 64px */}
+      <Navbar toggleSidebar={() => setIsOpen(!isOpen)} />
 
-      <div className="flex h-[calc(100vh-64px)] pt-16">
+      {/* Everything below navbar fills remaining height */}
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar
           isOpen={isOpen}
-          closeSidebar={() =>
-            setIsOpen(false)
-          }
+          closeSidebar={() => setIsOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto p-5 md:p-6">
           <Outlet />
         </main>
       </div>

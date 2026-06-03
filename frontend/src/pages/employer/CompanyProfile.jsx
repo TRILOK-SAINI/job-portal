@@ -1,318 +1,677 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useAuth } from "../../context/AuthContext";
+import toast from "react-hot-toast";
+import {
+  Building2, Globe, MapPin, Users, Calendar, CheckCircle2,
+  Clock, XCircle, Pencil, Upload, X, Save,
+} from "lucide-react";
+
+const Linkedin = (props) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+    <rect width="4" height="12" x="2" y="9" />
+    <circle cx="4" cy="4" r="2" />
+  </svg>
+);
+
+const Facebook = (props) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+  </svg>
+);
+
+const Twitter = (props) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M4 4l11.733 16h4.267l-11.733 -16z" />
+    <path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772" />
+  </svg>
+);
+
+const API = import.meta.env.VITE_API_URL;
+
+// ── Team size options — from blueprint schema ─────────────────────
+const TEAM_SIZES = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];
+
+// ── Empty form state ──────────────────────────────────────────────
+const EMPTY_FORM = {
+  name:        "",
+  website:     "",
+  industry:    "",
+  teamSize:    "1-10",
+  founded:     "",
+  description: "",
+  location:    { city: "", state: "", country: "" },
+  socialLinks: { linkedin: "", twitter: "", facebook: "" },
+};
+
+// ── Verification badge ────────────────────────────────────────────
+const BADGE = {
+  verified: { label: "Verified",             icon: CheckCircle2, cls: "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50" },
+  pending:  { label: "Pending Verification",  icon: Clock,        cls: "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/50" },
+  rejected: { label: "Verification Rejected", icon: XCircle,      cls: "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50" },
+};
+
+// ── Component Internal Core Styles (Maps directly to your index tokens) ──
+const cardStyle = "p-6 rounded-xl border shadow-sm transition-all duration-200";
+const labelStyle = "block text-sm font-medium mb-1.5";
+const inputStyle = "w-full p-2.5 text-sm rounded-lg border outline-none transition-all focus:ring-2 focus:ring-blue-500/20 bg-transparent";
+const btnPrimary = "inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg text-white transition-all hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-sm";
+const btnSecondary = "inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-all hover:opacity-80 bg-transparent cursor-pointer";
+
+function VerificationBadge({ status = "pending" }) {
+  const cfg  = BADGE[status] || BADGE.pending;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.cls}`}>
+      <Icon size={12} /> {cfg.label}
+    </span>
+  );
+}
+
+// ── Field error message ───────────────────────────────────────────
+function FieldError({ msg }) {
+  if (!msg) return null;
+  return <p className="text-red-500 text-xs mt-1 font-medium">{msg}</p>;
+}
 
 export default function CompanyProfile() {
-  const API = import.meta.env.VITE_API_URL;
-  const { user } = useAuth(); // Access current corporate administrator account
+  const fileRef = useRef(null);
 
-  // Operational State Matrices
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [company,     setCompany]     = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [saving,      setSaving]      = useState(false);
+  const [uploading,   setUploading]   = useState(false);
+  const [isEditing,   setIsEditing]   = useState(false);
+  const [form,        setForm]        = useState(EMPTY_FORM);
+  const [errors,      setErrors]      = useState({});
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [logoFile,    setLogoFile]    = useState(null);
 
-  // Core fields matching your backend Schema
-  const [formData, setFormData] = useState({
-    companyName: "",
-    logo: "",
-    website: "",
-    industry: "",
-    location: "",
-    description: "",
-  });
-
-  // 1. FETCH COMPANY PROFILE
+  // ── Fetch company on mount ────────────────────────────────────
   useEffect(() => {
-    const fetchCompanyData = async () => {
+    const fetch = async () => {
       try {
-        setLoading(true);
-        // Note: Assumes your app routes map this directly via router mount paths: /api/company
-        const response = await axios.get(`${API}/company`, {
+        const res = await axios.get(`${API}/company`, {
           withCredentials: true,
         });
-
-        if (response.data.success && response.data.company) {
-          const comp = response.data.company;
-          setFormData({
-            companyName: comp.companyName || "",
-            logo: comp.logo || "",
-            website: comp.website || "",
-            industry: comp.industry || "",
-            location: comp.location || "",
-            description: comp.description || "",
-          });
-        }
-      } catch (error) {
-        console.error("Error connecting with company databases:", error);
-        // If profile doesn't exist yet, we don't break; we allow insertion
-        if (error.response?.status !== 404) {
-          showFeedback("error", "Error mapping data pipelines from system servers.");
-        }
+        const c = res.data.company;
+        setCompany(c || null);
+        if (c) populateForm(c);
+      } catch (err) {
+        toast.error("Failed to load company profile");
       } finally {
         setLoading(false);
       }
     };
+    fetch();
+  }, []);
 
-    fetchCompanyData();
-  }, [API]);
-
-  const showFeedback = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 4000);
+  // ── Populate form from company data ──────────────────────────
+  const populateForm = (c) => {
+    setForm({
+      name:        c.name        || "",
+      website:     c.website     || "",
+      industry:    c.industry    || "",
+      teamSize:    c.teamSize    || "1-10",
+      founded:     c.founded     || "",
+      description: c.description || "",
+      location: {
+        city:    c.location?.city    || "",
+        state:   c.location?.state   || "",
+        country: c.location?.country || "",
+      },
+      socialLinks: {
+        linkedin: c.socialLinks?.linkedin || "",
+        twitter:  c.socialLinks?.twitter  || "",
+        facebook: c.socialLinks?.facebook || "",
+      },
+    });
   };
 
-  // 2. INPUT WORKSPACE TRANSFORM MUTATOR
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  // ── Form validation ───────────────────────────────────────────
+  const validate = () => {
+    const e = {};
 
-  // 3. SUBMIT PACKAGED METADATA FOR UPSERT ACTION
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.companyName.trim()) {
-      return showFeedback("error", "Company Name validation token missing.");
+    if (!form.name.trim())
+      e.name = "Company name is required";
+
+    if (form.website && !/^https?:\/\/.+/.test(form.website))
+      e.website = "Enter a valid URL starting with http:// or https://";
+
+    if (form.founded) {
+      const yr = Number(form.founded);
+      if (isNaN(yr) || yr < 1900 || yr > new Date().getFullYear())
+        e.founded = `Enter a valid year between 1900 and ${new Date().getFullYear()}`;
     }
 
-    try {
-      setSaving(true);
-      const response = await axios.put(`${API}/company`, formData, {
-        withCredentials: true,
-      });
+    if (form.socialLinks.linkedin && !/^https?:\/\/.+/.test(form.socialLinks.linkedin))
+      e.linkedin = "Enter a valid LinkedIn URL";
 
-      if (response.data.success) {
-        showFeedback("success", "Corporate profile successfully synchronized!");
-        setIsEditMode(false);
-        if (response.data.company) {
-          const updated = response.data.company;
-          setFormData({
-            companyName: updated.companyName || "",
-            logo: updated.logo || "",
-            website: updated.website || "",
-            industry: updated.industry || "",
-            location: updated.location || "",
-            description: updated.description || "",
-          });
-        }
+    if (form.socialLinks.twitter && !/^https?:\/\/.+/.test(form.socialLinks.twitter))
+      e.twitter = "Enter a valid Twitter URL";
+
+    if (form.socialLinks.facebook && !/^https?:\/\/.+/.test(form.socialLinks.facebook))
+      e.facebook = "Enter a valid Facebook URL";
+
+    if (form.description.length > 3000)
+      e.description = "Description cannot exceed 3000 characters";
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // ── Save profile ──────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const res = await axios.put(
+        `${API}/company`,
+        form,
+        { withCredentials: true }
+      );
+      if (logoFile) {
+        const formData = new FormData();
+        formData.append("logo", logoFile); 
+
+        await axios.post(
+          `${API}/company/logo`, 
+          formData, 
+          {
+            withCredentials: true,
+            headers: { "Content-Type": "multipart/form-data" },
+          }
+        );
       }
-    } catch (error) {
-      console.error("Failure submitting payload variation profiles:", error);
-      showFeedback("error", error.response?.data?.message || "Server rejected operations updates.");
+      setCompany(res.data.company);
+      populateForm(res.data.company);
+      setIsEditing(false);
+      setErrors({});
+      toast.success("Company profile saved successfully");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to save profile");
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Cancel edit ───────────────────────────────────────────────
+  const handleCancel = () => {
+    if (company) populateForm(company);
+    setIsEditing(false);
+    setErrors({});
+    setLogoPreview(null);
+    setLogoFile(null);
+  };
+
+  // ── Logo file select ──────────────────────────────────────────
+  const handleLogoSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Only JPG, PNG, or WebP allowed");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2MB");
+      return;
+    }
+
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  // ── Logo upload to Cloudinary via server ──────────────────────
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", logoFile);
+      const res = await axios.post(
+        `${API}/company/logo`,
+        fd,
+        { withCredentials: true }
+      );
+      setCompany((prev) => ({ ...prev, logo: res.data.logo }));
+      setLogoPreview(null);
+      setLogoFile(null);
+      toast.success("Logo uploaded successfully");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Logo upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── Field change handlers ─────────────────────────────────────
+  const handleChange = (e) => {
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    if (errors[e.target.name]) setErrors((er) => ({ ...er, [e.target.name]: "" }));
+  };
+
+  const handleLocation = (e) => {
+    setForm((f) => ({ ...f, location: { ...f.location, [e.target.name]: e.target.value } }));
+  };
+
+  const handleSocial = (e) => {
+    setForm((f) => ({ ...f, socialLinks: { ...f.socialLinks, [e.target.name]: e.target.value } }));
+    if (errors[e.target.name]) setErrors((er) => ({ ...er, [e.target.name]: "" }));
+  };
+
+  // ── Loading skeleton ──────────────────────────────────────────
   if (loading) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-12 py-24">
-        <div className="w-9 h-9 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--primary)", borderTopColor: "transparent" }}></div>
-        <p className="mt-4 text-xs font-semibold tracking-wide" style={{ color: "var(--text-muted)" }}>Hydrating data structures...</p>
+      <div className="space-y-4 animate-pulse px-4 py-8 max-w-6xl mx-auto">
+        <div className="h-8 w-48 rounded-lg" style={{ background: "var(--border)" }} />
+        <div className="p-6 h-40 rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
+        <div className="p-6 h-64 rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
       </div>
     );
   }
 
+  const logoSrc  = logoPreview || company?.logo || null;
+  const initials = (company?.name || form.name || "CO").slice(0, 2).toUpperCase();
+
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-6 md:py-8 font-sans transition-colors duration-150">
-      
-      {/* SECTION CONTAINER TOP BAR */}
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 pb-24 px-4 py-8 max-w-6xl mx-auto">
+
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>
-            Corporate Ecosystem Profile
-          </h1>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            Update public identities, validation schemas, vector logos, and active operational coordinates.
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Company Profile</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Manage your public company information
           </p>
         </div>
-        
-        {!isEditMode && (
+
+        {!isEditing ? (
           <button
-            onClick={() => setIsEditMode(true)}
-            className="text-xs font-bold px-4 py-2.5 rounded-xl text-white transition-all transform hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center gap-1.5"
-            style={{ background: "var(--primary)" }}
+            onClick={() => { populateForm(company || {}); setIsEditing(true); }}
+            className={btnPrimary}
+            style={{ backgroundColor: "var(--primary)" }}
           >
-            <span>🏢</span> Modify Profile Layout
+            <Pencil size={15} /> Edit Profile
           </button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={handleCancel} className={btnSecondary} style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+              <X size={15} /> Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving} className={btnPrimary} style={{ backgroundColor: "var(--primary)" }}>
+              <Save size={15} />
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         )}
       </div>
 
-      {/* ALERTS AND POPUP FEEDBACKS */}
-      {message.text && (
-        <div className={`p-3.5 rounded-xl text-xs font-semibold mb-6 border transition-all ${
-          message.type === "success" 
-            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" 
-            : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-        }`}>
-          {message.type === "success" ? "🛡️" : "⚠️"} {message.text}
-        </div>
-      )}
+      {/* ── Logo + identity ───────────────────────────────────── */}
+      <div className={cardStyle} style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="flex flex-col sm:flex-row items-start gap-6">
 
-      {/* CORPORATE CONTAINER PANEL CARD */}
-      <div 
-        className="border rounded-2xl shadow-sm overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div className="h-16 bg-gradient-to-r from-indigo-600/80 to-purple-600/80 w-full" />
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-2 flex-shrink-0">
+            <div className="w-24 h-24 rounded-2xl border-2 overflow-hidden flex items-center justify-center shadow-sm" style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}>
+              {logoSrc
+                ? <img src={logoSrc} alt="Logo" className="w-full h-full object-cover" />
+                : <span className="text-2xl font-bold" style={{ color: "var(--primary)" }}>{initials}</span>
+              }
+            </div>
 
-        <div className="p-5 md:p-8 -mt-8 relative">
-          
-          {/* LOGO BOX AREA GRAPHIC */}
-          <div 
-            className="w-14 h-14 border-4 rounded-xl flex items-center justify-center font-black text-sm overflow-hidden shadow mb-4 bg-gradient-to-tr from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700"
-            style={{ borderColor: "var(--card)" }}
-          >
-            {formData.logo ? (
-              <img src={formData.logo} alt="Corporate Identity Logo" className="w-full h-full object-cover" />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleLogoSelect}
+            />
+
+            {!logoPreview ? (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="text-xs flex items-center gap-1 font-medium hover:opacity-80"
+                style={{ color: "var(--primary)" }}
+              >
+                <Upload size={12} /> Upload Logo
+              </button>
             ) : (
-              <span style={{ color: "var(--primary)" }}>CORP</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleLogoUpload}
+                  disabled={uploading}
+                  className="text-xs text-white px-3 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                  style={{ backgroundColor: "var(--primary)" }}
+                >
+                  {uploading ? "Uploading..." : "Confirm"}
+                </button>
+                <button
+                  onClick={() => { setLogoPreview(null); setLogoFile(null); }}
+                  className="text-xs border px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors"
+                  style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+                >
+                  Remove
+                </button>
+              </div>
             )}
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-base font-bold" style={{ color: "var(--text)" }}>
-              {formData.companyName || "Unregistered Enterprise"}
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Authorized Workspace Representative: <span className="font-semibold">{user?.name || "System Admin"}</span>
+            <p className="text-[11px] text-center leading-tight" style={{ color: "var(--text-muted)" }}>
+              JPG, PNG, WebP<br />Max 2MB
             </p>
           </div>
 
-          {/* APPLICATION FORM INTERACTION DESIGNS */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              
-              {/* Enterprise Name Entry */}
+          {/* Name + badge */}
+          <div className="flex-1 min-w-0 w-full">
+            {isEditing ? (
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Legal Company Title *
+                <label className={labelStyle} style={{ color: "var(--text)" }}>
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="text"
-                  name="companyName"
-                  value={formData.companyName}
+                  name="name"
+                  value={form.name}
                   onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="Enterprise Tech Solutions"
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  placeholder="Acme Technologies Pvt. Ltd."
+                  className={inputStyle}
+                  style={{ 
+                    borderColor: errors.name ? "#f87171" : "var(--border)", 
+                    color: "var(--text)" 
+                  }}
                 />
+                <FieldError msg={errors.name} />
               </div>
-
-              {/* Logo String target link URL pointer */}
+            ) : (
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Logo Vector Asset URL Link
-                </label>
-                <input
-                  type="text"
-                  name="logo"
-                  value={formData.logo}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="https://example.com/logo.png"
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                />
-              </div>
-
-              {/* Website Pointer Link Input */}
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Corporate Public Domain URL Link
-                </label>
-                <input
-                  type="url"
-                  name="website"
-                  value={formData.website}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="https://enterprise.dev"
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                />
-              </div>
-
-              {/* Domain Industry Target Selection */}
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Industry Vertical
-                </label>
-                <input
-                  type="text"
-                  name="industry"
-                  value={formData.industry}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="FinTech, EdTech, SaaS"
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                />
-              </div>
-
-              {/* HQ Coordinates Location String Input */}
-              <div className="md:col-span-2">
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Headquarters Location Coordinate Matrix
-                </label>
-                <input
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="Mumbai, Maharashtra"
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                />
-              </div>
-
-              {/* Corporate Summary Paragraph Textarea Area */}
-              <div className="md:col-span-2">
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Corporate Enterprise Summary Mission Statement
-                </label>
-                <textarea
-                  name="description"
-                  rows="4"
-                  value={formData.description}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  placeholder="State your operational team values, system infrastructures, and technical visions..."
-                  className="w-full text-sm border p-2.5 rounded-xl focus:outline-none transition-all disabled:opacity-50 bg-transparent focus:ring-1 focus:ring-blue-500 leading-relaxed"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                />
-              </div>
-
-            </div>
-
-            {/* CONTROL ROW INJECTION ENGINE */}
-            {isEditMode && (
-              <div className="mt-6 pt-5 border-t flex justify-end gap-2.5" style={{ borderColor: "var(--border)" }}>
-                <button
-                  type="button"
-                  onClick={() => setIsEditMode(false)}
-                  disabled={saving}
-                  className="px-4 py-2 border rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-5 py-2 text-white font-bold text-xs rounded-xl shadow transition-all active:scale-[0.98] disabled:opacity-50"
-                  style={{ background: "var(--primary)" }}
-                >
-                  {saving ? "Updating..." : "Synchronize System Data"}
-                </button>
+                <h2 className="text-xl font-bold truncate" style={{ color: "var(--text)" }}>
+                  {company?.name || (
+                    <span className="font-normal italic" style={{ color: "var(--text-muted)" }}>Company name not set</span>
+                  )}
+                </h2>
+                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{company?.industry || "—"}</p>
               </div>
             )}
-          </form>
 
+            <div className="mt-3">
+              <VerificationBadge status={company?.verificationStatus} />
+            </div>
+
+            {!company && !isEditing && (
+              <p className="mt-3 text-sm border rounded-lg px-3 py-2 bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                No company profile yet. Click <strong>Edit Profile</strong> to get started.
+              </p>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ── Company details ───────────────────────────────────── */}
+      <div className={cardStyle} style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <h3 className="font-semibold mb-5 flex items-center gap-2" style={{ color: "var(--text)" }}>
+          <Building2 size={16} style={{ color: "var(--primary)" }} /> Company Details
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          {/* Website */}
+          <div>
+            <label className={labelStyle} style={{ color: "var(--text)" }}>
+              <Globe size={13} className="inline mr-1 opacity-70" style={{ color: "var(--text-muted)" }} /> Website
+            </label>
+            {isEditing ? (
+              <>
+                <input
+                  name="website"
+                  value={form.website}
+                  onChange={handleChange}
+                  placeholder="https://yourcompany.com"
+                  className={inputStyle}
+                  style={{ 
+                    borderColor: errors.website ? "#f87171" : "var(--border)", 
+                    color: "var(--text)" 
+                  }}
+                />
+                <FieldError msg={errors.website} />
+              </>
+            ) : (
+              <p className="text-sm break-all">
+                {company?.website
+                  ? <a href={company.website} target="_blank" rel="noreferrer" className="underline hover:opacity-80" style={{ color: "var(--primary)" }}>{company.website}</a>
+                  : <span style={{ color: "var(--text-muted)" }}>—</span>
+                }
+              </p>
+            )}
+          </div>
+
+          {/* Industry */}
+          <div>
+            <label className={labelStyle} style={{ color: "var(--text)" }}>
+              <Building2 size={13} className="inline mr-1 opacity-70" style={{ color: "var(--text-muted)" }} /> Industry
+            </label>
+            {isEditing ? (
+              <input
+                name="industry"
+                value={form.industry}
+                onChange={handleChange}
+                placeholder="e.g. FinTech, SaaS, EdTech"
+                className={inputStyle}
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}
+              />
+            ) : (
+              <p className="text-sm" style={{ color: "var(--text)" }}>{company?.industry || <span style={{ color: "var(--text-muted)" }}>—</span>}</p>
+            )}
+          </div>
+
+          {/* Team size */}
+          <div>
+            <label className={labelStyle} style={{ color: "var(--text)" }}>
+              <Users size={13} className="inline mr-1 opacity-70" style={{ color: "var(--text-muted)" }} /> Team Size
+            </label>
+            {isEditing ? (
+              <select 
+                name="teamSize" 
+                value={form.teamSize} 
+                onChange={handleChange} 
+                className={inputStyle}
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}
+              >
+                {TEAM_SIZES.map((s) => (
+                  <option key={s} value={s} style={{ background: "var(--card)", color: "var(--text)" }}>{s} employees</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--text)" }}>
+                {company?.teamSize ? `${company.teamSize} employees` : <span style={{ color: "var(--text-muted)" }}>—</span>}
+              </p>
+            )}
+          </div>
+
+          {/* Founded */}
+          <div>
+            <label className={labelStyle} style={{ color: "var(--text)" }}>
+              <Calendar size={13} className="inline mr-1 opacity-70" style={{ color: "var(--text-muted)" }} /> Founded Year
+            </label>
+            {isEditing ? (
+              <>
+                <input
+                  type="number"
+                  name="founded"
+                  value={form.founded}
+                  onChange={handleChange}
+                  placeholder="e.g. 2018"
+                  min="1900"
+                  max={new Date().getFullYear()}
+                  className={inputStyle}
+                  style={{ 
+                    borderColor: errors.founded ? "#f87171" : "var(--border)", 
+                    color: "var(--text)" 
+                  }}
+                />
+                <FieldError msg={errors.founded} />
+              </>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--text)" }}>
+                {company?.founded || <span style={{ color: "var(--text-muted)" }}>—</span>}
+              </p>
+            )}
+          </div>
+
+          {/* Description — full width */}
+          <div className="md:col-span-2">
+            <label className={labelStyle} style={{ color: "var(--text)" }}>Company Description</label>
+            {isEditing ? (
+              <>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  rows={4}
+                  placeholder="Describe your company, culture, mission..."
+                  className={`${inputStyle} resize-none`}
+                  style={{ 
+                    borderColor: errors.description ? "#f87171" : "var(--border)", 
+                    color: "var(--text)" 
+                  }}
+                />
+                <div className="flex justify-between mt-1">
+                  <FieldError msg={errors.description} />
+                  <span className={`text-xs ml-auto ${form.description.length > 2800 ? "text-red-400" : ""}`} style={{ color: "var(--text-muted)" }}>
+                    {form.description.length}/3000
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: "var(--text)" }}>
+                {company?.description || <span className="italic" style={{ color: "var(--text-muted)" }}>No description added yet.</span>}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Location ──────────────────────────────────────────── */}
+      <div className={cardStyle} style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <h3 className="font-semibold mb-5 flex items-center gap-2" style={{ color: "var(--text)" }}>
+          <MapPin size={16} style={{ color: "var(--primary)" }} /> Location
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { key: "city",    label: "City"             },
+            { key: "state",   label: "State / Province" },
+            { key: "country", label: "Country"          },
+          ].map(({ key, label }) => (
+            <div key={key}>
+              <label className={labelStyle} style={{ color: "var(--text)" }}>{label}</label>
+              {isEditing ? (
+                <input
+                  name={key}
+                  value={form.location[key]}
+                  onChange={handleLocation}
+                  placeholder={label}
+                  className={inputStyle}
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                />
+              ) : (
+                <p className="text-sm" style={{ color: "var(--text)" }}>
+                  {company?.location?.[key] || <span style={{ color: "var(--text-muted)" }}>—</span>}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Social links ──────────────────────────────────────── */}
+      <div className={cardStyle} style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <h3 className="font-semibold mb-5 flex items-center gap-2" style={{ color: "var(--text)" }}>
+          Social Links
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[
+            { key: "linkedin", label: "LinkedIn", icon: Linkedin, placeholder: "https://linkedin.com/company/..." },
+            { key: "twitter",  label: "Twitter",  icon: Twitter,  placeholder: "https://twitter.com/..."          },
+            { key: "facebook", label: "Facebook", icon: Facebook, placeholder: "https://facebook.com/..."         },
+          ].map(({ key, label, icon: Icon, placeholder }) => (
+            <div key={key}>
+              <label className={labelStyle} style={{ color: "var(--text)" }}>
+                <Icon size={13} className="inline mr-1 opacity-70" style={{ color: "var(--text-muted)" }} /> {label}
+              </label>
+              {isEditing ? (
+                <>
+                  <input
+                    name={key}
+                    value={form.socialLinks[key]}
+                    onChange={handleSocial}
+                    placeholder={placeholder}
+                    className={inputStyle}
+                    style={{ 
+                      borderColor: errors[key] ? "#f87171" : "var(--border)", 
+                      color: "var(--text)" 
+                    }}
+                  />
+                  <FieldError msg={errors[key]} />
+                </>
+              ) : (
+                <p className="text-sm break-all">
+                  {company?.socialLinks?.[key]
+                    ? <a href={company.socialLinks[key]} target="_blank" rel="noreferrer" className="underline hover:opacity-80" style={{ color: "var(--primary)" }}>{company.socialLinks[key]}</a>
+                    : <span style={{ color: "var(--text-muted)" }}>—</span>
+                  }
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Sticky bottom save bar — edit mode only ───────────── */}
+      {isEditing && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t px-6 py-4 flex justify-end gap-3 shadow-lg" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <button onClick={handleCancel} className={btnSecondary} style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+            <X size={15} /> Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} className={btnPrimary} style={{ backgroundColor: "var(--primary)" }}>
+            <Save size={15} />
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

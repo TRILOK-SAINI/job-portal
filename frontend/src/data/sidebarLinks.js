@@ -43,8 +43,8 @@ export const sidebarLinks = {
       icon: FaBriefcase,
     },
     {
-      name: "Applicants",
-      path: "/employer/applicants",
+      name: "Applications",
+      path: "/employer/applications",
       icon: FaUserTie,
     },
   ],

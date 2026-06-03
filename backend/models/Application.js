@@ -14,14 +14,32 @@ const applicationSchema = new mongoose.Schema(
       required: true,
     },
 
+    cover_letter: {
+      type: String,
+      default: "",
+    },
+
+    source: {
+      type: String,
+      default: "direct",
+    },
+
     status: {
       type: String,
       enum: [
-        "Applied",
-        "Shortlisted",
-        "Rejected",
+        "applied",
+        "screening",
+        "shortlisted",
+        "interview",
+        "rejected",
+        "hired",
       ],
-      default: "Applied",
+      default: "applied",
+    },
+
+    recruiter_note: {
+      type: String,
+      default: "",
     },
   },
   {
@@ -29,17 +47,7 @@ const applicationSchema = new mongoose.Schema(
   }
 );
 
-applicationSchema.index(
-  {
-    candidate: 1,
-    job: 1,
-  },
-  {
-    unique: true,
-  }
-);
+// One candidate can apply to a job only once
+applicationSchema.index({ candidate: 1, job: 1 }, { unique: true });
 
-export default mongoose.model(
-  "Application",
-  applicationSchema
-);
+export default mongoose.model("Application", applicationSchema);
